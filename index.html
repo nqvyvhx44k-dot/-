@@ -6,11 +6,8 @@
   <title>極簡交通路線管家</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <style>
-    /* 隱藏滾動條但保持滾動功能 */
     .no-scrollbar::-webkit-scrollbar { display: none; }
     .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
-    
-    /* 淡入動畫 */
     @keyframes fadeIn {
       from { opacity: 0; transform: translateY(10px); }
       to { opacity: 1; transform: translateY(0); }
@@ -25,17 +22,6 @@
   <div id="app"></div>
 
   <script type="module">
-    import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-    import { getAuth, signInWithCustomToken, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-    import { getFirestore, doc, setDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
-
-    // --- Firebase Initialization ---
-    const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {};
-    const app = initializeApp(firebaseConfig);
-    const auth = getAuth(app);
-    const db = getFirestore(app);
-    const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
-
     // --- SVG 圖示庫 ---
     const icons = {
       chevronLeft: `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg>`,
@@ -50,23 +36,21 @@
 
     // --- 全域狀態管理 ---
     const state = {
-      user: null,
-      view: 'lists', // 'lists' | 'detail'
+      view: 'lists',
       lists: [],
       routes: {},
       activeListId: null,
       loading: false,
       errorMsg: '',
-      isCloudReady: false
+      isCloudReady: true
     };
 
-    // --- 輔助函式：取得當前作用中的清單 ---
+    const STORAGE_KEY = 'travel_planner_data';
+
     const getActiveList = () => state.lists.find(l => l.id === state.activeListId);
 
-    // --- 畫面渲染核心邏輯 ---
     function render() {
       const appContainer = document.getElementById('app');
-      
       if (state.view === 'lists') {
         appContainer.innerHTML = renderListsView();
       } else if (state.view === 'detail' && getActiveList()) {
@@ -74,12 +58,9 @@
       }
     }
 
-    // --- 渲染：所有清單頁面 ---
     function renderListsView() {
       let content = '';
-      if (!state.isCloudReady) {
-        content = `<div class="text-center py-10 text-gray-400">正在讀取雲端記憶...</div>`;
-      } else if (state.lists.length === 0) {
+      if (state.lists.length === 0) {
         content = `<div class="text-center py-10 text-gray-400">目前還沒有清單喔</div>`;
       } else {
         content = state.lists.map(list => `
@@ -110,7 +91,6 @@
       `;
     }
 
-    // --- 渲染：單一清單詳細頁面 ---
     function renderDetailView() {
       const activeList = getActiveList();
       const currentRoutes = state.routes[state.activeListId];
@@ -215,7 +195,6 @@
       return `
         <div class="max-w-2xl mx-auto w-full p-6 animate-fade-in flex flex-col h-[100dvh]">
           
-          <!-- Header -->
           <div class="flex items-center gap-4 border-b border-gray-200 pb-4 mb-6 shrink-0">
             <button onclick="window.handleBackToLists()" class="text-gray-400 hover:text-gray-800 transition-colors">
               ${icons.chevronLeft}
@@ -223,10 +202,7 @@
             <input type="text" value="${activeList.name}" onblur="window.handleUpdateListName(event)" class="text-2xl font-light text-gray-800 bg-transparent border-none outline-none w-full placeholder-gray-300" placeholder="輸入清單名稱...">
           </div>
 
-          <!-- List Content (Scrollable) -->
           <div class="flex-1 overflow-y-auto no-scrollbar relative">
-            
-            <!-- Add Location Input Form -->
             <form onsubmit="window.handleAddLocation(event)" class="mb-8 relative">
               <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-gray-400">
                 ${icons.mapPin}
@@ -237,7 +213,6 @@
               </button>
             </form>
 
-            <!-- Locations -->
             <div class="relative">
               ${locationsContent}
             </div>
@@ -245,33 +220,30 @@
             ${errorContent}
             ${actionButton}
 
-            <!-- 巨大的空白防撞區 -->
             <div class="h-64 shrink-0 w-full"></div>
           </div>
         </div>
       `;
     }
 
-    // --- 雲端資料寫入輔助 ---
+    const saveToLocal = () => {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({
+        lists: state.lists,
+        routes: state.routes
+      }));
+    };
+
     const updateListsToCloud = (newLists) => {
       state.lists = newLists;
+      saveToLocal();
       render();
-      if (state.user) {
-        const docRef = doc(db, 'artifacts', appId, 'users', state.user.uid, 'travelData', 'main');
-        setDoc(docRef, { lists: newLists }, { merge: true });
-      }
     };
 
     const updateRoutesToCloud = (newRoutes) => {
       state.routes = newRoutes;
+      saveToLocal();
       render();
-      if (state.user) {
-        const docRef = doc(db, 'artifacts', appId, 'users', state.user.uid, 'travelData', 'main');
-        setDoc(docRef, { routes: newRoutes }, { merge: true });
-      }
     };
-
-    // --- 全域事件處理函式 (掛載到 window 供 HTML 呼叫) ---
     
     window.handleBackToLists = () => {
       state.activeListId = null;
@@ -370,6 +342,7 @@
       state.errorMsg = '';
       render();
 
+      // ★注意這裡！你必須把自己的 Gemini API Key 填入雙引號中才能運作
       const apiKey = ""; 
       const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`;
 
@@ -444,54 +417,30 @@
         }
       } catch (error) {
         console.error("API 錯誤或解析失敗:", error);
-        state.errorMsg = '抱歉，管家在查路線時網路稍微卡住了，我們再按一次好嗎？';
-        render(); // 確保錯誤訊息有被渲染出來
+        state.errorMsg = '抱歉，管家在查路線時網路稍微卡住了，請確認是否有填寫正確的 API Key？';
+        render();
       } finally {
         state.loading = false;
         render();
       }
     };
 
-    // --- 初始化執行與身分驗證綁定 ---
-    async function init() {
-      // 先顯示初始畫面
-      render(); 
-      
+    function init() {
       try {
-        if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-          await signInWithCustomToken(auth, __initial_auth_token);
+        const saved = localStorage.getItem(STORAGE_KEY);
+        if (saved) {
+          const data = JSON.parse(saved);
+          if (data.lists) state.lists = data.lists;
+          if (data.routes) state.routes = data.routes;
         } else {
-          await signInAnonymously(auth);
+          state.lists = [{ id: Date.now(), name: '我的日本自由行', locations: [] }];
         }
-      } catch (error) {
-        console.error("驗證連線失敗", error);
+      } catch (e) {
+        state.lists = [{ id: Date.now(), name: '我的日本自由行', locations: [] }];
       }
-
-      onAuthStateChanged(auth, (currentUser) => {
-        state.user = currentUser;
-        
-        if (currentUser) {
-          const docRef = doc(db, 'artifacts', appId, 'users', currentUser.uid, 'travelData', 'main');
-          onSnapshot(docRef, (docSnap) => {
-            state.isCloudReady = true;
-            if (docSnap.exists()) {
-              const data = docSnap.data();
-              if (data.lists) state.lists = data.lists;
-              if (data.routes) state.routes = data.routes;
-            } else {
-              const initialLists = [{ id: Date.now(), name: '我的日本自由行', locations: [] }];
-              state.lists = initialLists;
-              setDoc(docRef, { lists: initialLists, routes: {} }, { merge: true });
-            }
-            render();
-          }, (error) => {
-            console.error("雲端讀取錯誤:", error);
-          });
-        }
-      });
+      render();
     }
 
-    // 啟動應用程式
     init();
 
   </script>
