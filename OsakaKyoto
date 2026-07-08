@@ -232,7 +232,6 @@
               <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-gray-400">
                 ${icons.mapPin}
               </div>
-              <!-- 避免 React onchange 的問題，HTML 直接透過 oninput 控制確認鈕的狀態 -->
               <input id="newLocInput" type="text" oninput="window.toggleAddBtn()" placeholder="搜尋並新增地點（例如：清水寺）..." class="w-full pl-10 pr-20 py-3 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-400 focus:bg-white transition-all text-gray-700">
               <button id="addLocBtn" type="submit" disabled class="absolute inset-y-1 right-1 px-4 text-sm font-medium text-white bg-gray-800 rounded-md hover:bg-black disabled:opacity-50 transition-colors cursor-pointer">
                 確認
@@ -447,6 +446,7 @@
       } catch (error) {
         console.error("API 錯誤或解析失敗:", error);
         state.errorMsg = '抱歉，管家在查路線時網路稍微卡住了，我們再按一次好嗎？';
+        render(); // 確保錯誤訊息有被渲染出來
       } finally {
         state.loading = false;
         render();
@@ -499,5 +499,5 @@
 </body>
 </html>
 
-```
 
+```
